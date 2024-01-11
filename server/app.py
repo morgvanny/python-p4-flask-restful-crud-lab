@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, make_response, request
 from flask_migrate import Migrate
 from flask_restful import Api, Resource
-
-from models import db, Plant
+from models import Plant, db
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///plants.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///plants.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.json.compact = False
 
 migrate = Migrate(app, db)
@@ -18,38 +17,66 @@ api = Api(app)
 
 
 class Plants(Resource):
-
     def get(self):
-        plants = [plant.to_dict() for plant in Plant.query.all()]
-        return make_response(jsonify(plants), 200)
+        return make_response([plant.to_dict() for plant in Plant.query.all()], 200)
 
     def post(self):
         data = request.get_json()
+        plant = Plant()
+        for attr in data:
+            setattr(plant, attr, data[attr])
 
-        new_plant = Plant(
-            name=data['name'],
-            image=data['image'],
-            price=data['price'],
-        )
+        db.session.add(plant)
+        db.session.commit()
+        return make_response(plant.to_dict(), 201)
 
-        db.session.add(new_plant)
+
+api.add_resource(Plants, "/plants")
+
+
+class PlantById(Resource):
+    def get(self, id):
+        plant = Plant.query.get(id)
+        return make_response(plant.to_dict(), 200)
+
+    def patch(self, id):
+        plant = Plant.query.get(id)
+        data = request.get_json()
+        for attr in data:
+            setattr(plant, attr, data[attr])
+
+        db.session.add(plant)
         db.session.commit()
 
-        return make_response(new_plant.to_dict(), 201)
+        return make_response(plant.to_dict(), 200)
+
+    def delete(self, id):
+        plant = Plant.query.get(id)
+        db.session.delete(plant)
+        db.session.commit()
+        return make_response("", 204)
 
 
-api.add_resource(Plants, '/plants')
+api.add_resource(PlantById, "/plants/<int:id>")
 
 
-class PlantByID(Resource):
-
-    def get(self, id):
-        plant = Plant.query.filter_by(id=id).first().to_dict()
-        return make_response(jsonify(plant), 200)
+@app.route("/")
+def home():
+    return make_response({"message": "Welcome to my plant website"}, 200)
 
 
-api.add_resource(PlantByID, '/plants/<int:id>')
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(port=5555, debug=True)
+
+
+# Create
+#    POST /plants
+# Read
+#  Index
+#    GET /plants
+#  Single Plant
+#    GET /plants/<int:id>
+# Update
+#    PATCH/PUT /plants/<int:id>
+# Destroy
+#    DELETE /plants/<int:id>
